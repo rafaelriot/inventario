@@ -23,7 +23,7 @@ export default function LayoutWrapper({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // If path is login, or still loading user session
-  if (pathname === '/login') {
+  if (pathname === '/login' || pathname === '/login/') {
     return <>{children}</>;
   }
 
