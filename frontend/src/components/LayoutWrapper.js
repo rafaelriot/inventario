@@ -14,7 +14,8 @@ import {
   Menu, 
   X, 
   User,
-  Truck
+  Truck,
+  QrCode
 } from 'lucide-react';
 
 export default function LayoutWrapper({ children }) {
@@ -47,6 +48,7 @@ export default function LayoutWrapper({ children }) {
     { name: 'Inventario', href: '/materials', icon: Boxes },
     { name: 'Movimientos', href: '/transactions', icon: ArrowLeftRight },
     { name: 'Proveedores', href: '/suppliers', icon: Truck },
+    { name: 'Tickets QR', href: '/tickets', icon: QrCode },
     { name: 'Reportes', href: '/reports', icon: FileText },
   ];
 
@@ -70,7 +72,7 @@ export default function LayoutWrapper({ children }) {
         <nav className="flex-1 px-4 py-6 space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
             return (
               <Link
                 key={item.name}
@@ -130,7 +132,7 @@ export default function LayoutWrapper({ children }) {
             <nav className="flex-1 space-y-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href;
+                const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
                 return (
                   <Link
                     key={item.name}

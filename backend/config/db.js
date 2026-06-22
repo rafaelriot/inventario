@@ -98,6 +98,25 @@ async function initDatabase() {
         );
       `);
 
+      // Create Tickets table (Carga y validación con QR)
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS tickets (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          material_id INT NOT NULL,
+          quantity DECIMAL(10, 2) NOT NULL,
+          vehicle_info VARCHAR(100) NOT NULL,
+          authorized_by INT,
+          received_by INT,
+          status ENUM('pending', 'received', 'cancelled') NOT NULL DEFAULT 'pending',
+          qr_token VARCHAR(255) NOT NULL UNIQUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          received_at TIMESTAMP NULL DEFAULT NULL,
+          FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE,
+          FOREIGN KEY (authorized_by) REFERENCES users(id) ON DELETE SET NULL,
+          FOREIGN KEY (received_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+      `);
+
       // Check if unit_price column exists (in case table was created earlier)
       const [columnsPrice] = await conn.query('SHOW COLUMNS FROM materials LIKE "unit_price"');
       if (columnsPrice.length === 0) {
