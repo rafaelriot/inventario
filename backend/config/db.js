@@ -119,6 +119,13 @@ async function initDatabase() {
         console.log('Database upgraded: added provider_id to purchases table');
       }
 
+      // Check if session_token column exists in users
+      const [columnsSess] = await conn.query('SHOW COLUMNS FROM users LIKE "session_token"');
+      if (columnsSess.length === 0) {
+        await conn.query('ALTER TABLE users ADD COLUMN session_token VARCHAR(255) DEFAULT NULL, ADD COLUMN last_activity TIMESTAMP NULL DEFAULT NULL');
+        console.log('Database upgraded: added session tracking to users table');
+      }
+
       // Seed default admin if not exists
       const [adminRows] = await conn.query('SELECT id FROM users WHERE username = "admin"');
       if (adminRows.length === 0) {

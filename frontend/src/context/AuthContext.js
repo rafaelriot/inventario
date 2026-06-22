@@ -50,7 +50,12 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await apiFetch('/auth/logout', { method: 'POST' });
+    } catch (error) {
+      console.error('Error closing session on server:', error);
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setToken(null);
