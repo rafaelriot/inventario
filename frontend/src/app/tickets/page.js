@@ -79,12 +79,16 @@ export default function TicketsHistory() {
     }
   };
 
-  // Filtered tickets
   const filteredTickets = tickets.filter((t) => {
-    const matchesVehicle = t.vehicle_info.toLowerCase().includes(searchVehicle.toLowerCase());
+    const folioStr = `TK-${String(t.id).padStart(5, '0')}`;
+    const matchesSearch = 
+      t.vehicle_info.toLowerCase().includes(searchVehicle.toLowerCase()) ||
+      folioStr.toLowerCase().includes(searchVehicle.toLowerCase()) ||
+      t.id.toString().includes(searchVehicle.trim());
+      
     const matchesMaterial = filterMaterial === '' || t.material_name === filterMaterial;
     const matchesStatus = filterStatus === '' || t.status === filterStatus;
-    return matchesVehicle && matchesMaterial && matchesStatus;
+    return matchesSearch && matchesMaterial && matchesStatus;
   });
 
   if (loading) {
@@ -135,7 +139,7 @@ export default function TicketsHistory() {
           <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Buscar por vehículo/volteo..."
+            placeholder="Buscar por folio o vehículo/volteo..."
             value={searchVehicle}
             onChange={(e) => setSearchVehicle(e.target.value)}
             className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
