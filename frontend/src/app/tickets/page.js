@@ -234,7 +234,7 @@ export default function TicketsHistory() {
                       </td>
                       <td className="py-4 px-6 text-right space-x-2">
                         <a
-                          href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/tickets/${t.id}/pdf`}
+                          href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/tickets/${t.id}/pdf?token=${typeof window !== 'undefined' ? localStorage.getItem('token') : ''}`}
                           download
                           title="Descargar Ticket PDF"
                           className="inline-flex p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all shadow-sm"

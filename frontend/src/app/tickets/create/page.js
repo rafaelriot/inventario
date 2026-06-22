@@ -326,7 +326,7 @@ export default function CreateTicket() {
             {/* Ticket Footer */}
             <div className="bg-slate-50 border-t border-slate-100 p-4 flex gap-2">
               <a
-                href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/tickets/${createdTicket.id}/pdf`}
+                href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/tickets/${createdTicket.id}/pdf?token=${typeof window !== 'undefined' ? localStorage.getItem('token') : ''}`}
                 download
                 className="flex-1 flex items-center justify-center py-2.5 px-4 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-sm"
               >

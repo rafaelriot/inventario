@@ -3,7 +3,7 @@ const { pool } = require('../config/db');
 
 async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Format: Bearer TOKEN
+  const token = (authHeader && authHeader.split(' ')[1]) || req.query.token; // Format: Bearer TOKEN or ?token=...
 
   if (!token) {
     return res.status(401).json({ message: 'Token de acceso no proporcionado.' });
