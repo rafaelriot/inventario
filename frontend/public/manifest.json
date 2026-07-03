@@ -1,0 +1,16 @@
+{
+  "name": "Inventario de Obra QR",
+  "short_name": "Inventario QR",
+  "description": "Sistema de control de inventario de obra offline-ready",
+  "start_url": "/tickets/scan",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}
