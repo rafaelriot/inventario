@@ -1,7 +1,9 @@
-const CACHE_NAME = 'obra-inventario-pwa-v2';
+const CACHE_NAME = 'obra-inventario-pwa-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/login',
+  '/tickets',
+  '/tickets/scan',
   '/favicon.ico'
 ];
 
@@ -42,8 +44,8 @@ self.addEventListener('fetch', (event) => {
         if (
           networkResponse.status === 200 &&
           (request.mode === 'navigate' || 
-           request.url.includes('_next/static') || 
-           request.url.match(/\.(js|css|png|jpg|jpeg|svg|woff2|ico)$/))
+           request.url.includes('_next/') || 
+           request.url.match(/\.(js|css|png|jpg|jpeg|svg|woff2|ico|json)$/))
         ) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
