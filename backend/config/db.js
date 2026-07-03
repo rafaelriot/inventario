@@ -105,6 +105,9 @@ async function initDatabase() {
           material_id INT NOT NULL,
           quantity DECIMAL(10, 2) NOT NULL,
           vehicle_info VARCHAR(100) NOT NULL,
+          truck_number VARCHAR(50) DEFAULT NULL,
+          license_plate VARCHAR(50) DEFAULT NULL,
+          batch_token VARCHAR(255) DEFAULT NULL,
           authorized_by INT,
           received_by INT,
           status ENUM('pending', 'received', 'cancelled') NOT NULL DEFAULT 'pending',
@@ -116,6 +119,20 @@ async function initDatabase() {
           FOREIGN KEY (received_by) REFERENCES users(id) ON DELETE SET NULL
         );
       `);
+
+      // Check if truck_number column exists in tickets
+      const [columnsTruck] = await conn.query('SHOW COLUMNS FROM tickets LIKE "truck_number"');
+      if (columnsTruck.length === 0) {
+        await conn.query('ALTER TABLE tickets ADD COLUMN truck_number VARCHAR(50) DEFAULT NULL, ADD COLUMN license_plate VARCHAR(50) DEFAULT NULL');
+        console.log('Database upgraded: added truck_number and license_plate to tickets table');
+      }
+
+      // Check if batch_token column exists in tickets
+      const [columnsBatch] = await conn.query('SHOW COLUMNS FROM tickets LIKE "batch_token"');
+      if (columnsBatch.length === 0) {
+        await conn.query('ALTER TABLE tickets ADD COLUMN batch_token VARCHAR(255) DEFAULT NULL');
+        console.log('Database upgraded: added batch_token to tickets table');
+      }
 
       // Check if unit_price column exists (in case table was created earlier)
       const [columnsPrice] = await conn.query('SHOW COLUMNS FROM materials LIKE "unit_price"');
