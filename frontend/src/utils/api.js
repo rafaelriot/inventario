@@ -15,7 +15,7 @@ export async function apiFetch(endpoint, options = {}) {
   });
 
   if (response.status === 401 || response.status === 403) {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';

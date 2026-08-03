@@ -21,11 +21,12 @@ export function AuthProvider({ children }) {
     if (storedToken && storedUser) {
       setToken(storedToken);
       setUser(JSON.parse(storedUser));
-    } else if (pathname !== '/login') {
-      router.push('/login');
+    } else if (window.location.pathname !== '/login' && window.location.pathname !== '/login/') {
+      router.replace('/login');
     }
     setLoading(false);
-  }, [pathname, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const login = async (username, password) => {
     try {

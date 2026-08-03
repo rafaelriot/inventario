@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { apiFetch } from '../../utils/api';
@@ -23,7 +23,7 @@ import {
   History
 } from 'lucide-react';
 
-export default function MixturesPage() {
+function MixturesContent() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -914,5 +914,17 @@ export default function MixturesPage() {
       {/* Usage Modal (shared) */}
       {renderUsageModal()}
     </div>
+  );
+}
+
+export default function MixturesPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-violet-600"></div>
+      </div>
+    }>
+      <MixturesContent />
+    </Suspense>
   );
 }
