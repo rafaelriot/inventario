@@ -15,7 +15,8 @@ import {
   X, 
   User,
   Truck,
-  QrCode
+  QrCode,
+  FlaskConical
 } from 'lucide-react';
 
 export default function LayoutWrapper({ children }) {
@@ -47,6 +48,7 @@ export default function LayoutWrapper({ children }) {
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Inventario', href: '/materials', icon: Boxes },
     { name: 'Movimientos', href: '/transactions', icon: ArrowLeftRight },
+    { name: 'Mezclas', href: '/mixtures', icon: FlaskConical },
     { name: 'Proveedores', href: '/suppliers', icon: Truck },
     { name: 'Tickets QR', href: '/tickets', icon: QrCode },
     { name: 'Reportes', href: '/reports', icon: FileText },

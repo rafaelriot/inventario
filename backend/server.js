@@ -24,6 +24,7 @@ const transactionsRoutes = require('./routes/transactions');
 const reportsRoutes = require('./routes/reports');
 const suppliersRoutes = require('./routes/suppliers');
 const ticketsRoutes = require('./routes/tickets');
+const mixturesRoutes = require('./routes/mixtures');
 
 // Register Routes
 app.use('/api/auth', authRoutes);
@@ -32,6 +33,7 @@ app.use('/api/transactions', transactionsRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/suppliers', suppliersRoutes);
 app.use('/api/tickets', ticketsRoutes);
+app.use('/api/mixtures', mixturesRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

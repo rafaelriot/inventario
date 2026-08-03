@@ -120,6 +120,49 @@ async function initDatabase() {
         );
       `);
 
+      // Create Mixtures table (recipes/formulas)
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS mixtures (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(150) NOT NULL UNIQUE,
+          unit VARCHAR(20) NOT NULL,
+          description TEXT,
+          created_by INT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+      `);
+
+      // Create Mixture Components table (materials + percentage)
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS mixture_components (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          mixture_id INT NOT NULL,
+          material_id INT NOT NULL,
+          percentage DECIMAL(5, 2) NOT NULL,
+          FOREIGN KEY (mixture_id) REFERENCES mixtures(id) ON DELETE CASCADE,
+          FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE,
+          UNIQUE KEY unique_mixture_material (mixture_id, material_id)
+        );
+      `);
+
+      // Create Mixture Usages table (shipment/usage history)
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS mixture_usages (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          mixture_id INT NOT NULL,
+          total_quantity DECIMAL(10, 2) NOT NULL,
+          usage_date DATE NOT NULL,
+          responsible VARCHAR(100) NOT NULL,
+          user_id INT,
+          notes TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (mixture_id) REFERENCES mixtures(id) ON DELETE CASCADE,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        );
+      `);
+
       // Check if truck_number column exists in tickets
       const [columnsTruck] = await conn.query('SHOW COLUMNS FROM tickets LIKE "truck_number"');
       if (columnsTruck.length === 0) {
