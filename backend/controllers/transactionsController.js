@@ -201,3 +201,72 @@ exports.getDashboardSummary = async (req, res) => {
     res.status(500).json({ message: 'Error al obtener el resumen del dashboard.' });
   }
 };
+
+// Get Dashboard summary for a specific project
+exports.getProjectDashboardSummary = async (req, res) => {
+  const { projectId } = req.params;
+
+  try {
+    // Verify project
+    const [projRows] = await pool.query('SELECT id, name, status FROM projects WHERE id = ?', [projectId]);
+    if (projRows.length === 0) {
+      return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    }
+
+    const project = projRows[0];
+
+    // Count distinct materials used by this project
+    const [[{ total_materials_used }]] = await pool.query(
+      'SELECT COUNT(DISTINCT material_id) as total_materials_used FROM usages WHERE project_id = ?',
+      [projectId]
+    );
+
+    // Count usage records
+    const [[{ total_usage_records }]] = await pool.query(
+      'SELECT COUNT(*) as total_usage_records FROM usages WHERE project_id = ?',
+      [projectId]
+    );
+
+    // Count mixture usage records
+    const [[{ total_mixture_records }]] = await pool.query(
+      'SELECT COUNT(*) as total_mixture_records FROM mixture_usages WHERE project_id = ?',
+      [projectId]
+    );
+
+    // Top materials consumed with cost estimate
+    const [topMaterials] = await pool.query(`
+      SELECT 
+        m.name,
+        m.unit,
+        m.unit_price,
+        SUM(u.quantity) AS total_qty,
+        SUM(u.quantity * m.unit_price) AS cost
+      FROM usages u
+      JOIN materials m ON u.material_id = m.id
+      WHERE u.project_id = ?
+      GROUP BY u.material_id, m.name, m.unit, m.unit_price
+      ORDER BY cost DESC
+    `, [projectId]);
+
+    // Total estimated cost
+    const estimated_cost = topMaterials.reduce((sum, m) => sum + parseFloat(m.cost || 0), 0);
+
+    res.json({
+      project_name: project.name,
+      project_status: project.status,
+      total_materials_used,
+      total_usage_records,
+      total_mixture_records,
+      estimated_cost,
+      top_materials: topMaterials.map(m => ({
+        name: m.name,
+        total_qty: parseFloat(m.total_qty),
+        unit: m.unit,
+        cost: parseFloat(m.cost || 0)
+      }))
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error al obtener el resumen del proyecto.' });
+  }
+};

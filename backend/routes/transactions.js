@@ -7,5 +7,5 @@ router.post('/purchases', authenticateToken, transactionsController.addPurchase)
 router.post('/usages', authenticateToken, transactionsController.addUsage);
 router.get('/history', authenticateToken, transactionsController.getHistory);
 router.get('/dashboard-summary', authenticateToken, transactionsController.getDashboardSummary);
-
+router.get('/project-summary/:projectId', authenticateToken, transactionsController.getProjectDashboardSummary);
 module.exports = router;
