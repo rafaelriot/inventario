@@ -216,10 +216,10 @@ exports.deleteMixture = async (req, res) => {
 // Register a mixture usage/shipment — atomic stock deduction
 exports.registerMixtureUsage = async (req, res) => {
   const { id } = req.params;
-  const { total_quantity, usage_date, responsible, notes } = req.body;
+  const { total_quantity, usage_date, responsible, notes, project_id } = req.body;
 
-  if (!total_quantity || !usage_date || !responsible) {
-    return res.status(400).json({ message: 'Cantidad, fecha y responsable son obligatorios.' });
+  if (!total_quantity || !usage_date || !responsible || !project_id) {
+    return res.status(400).json({ message: 'Cantidad, fecha, responsable y proyecto son obligatorios.' });
   }
 
   const totalQty = parseFloat(total_quantity);
@@ -291,18 +291,29 @@ exports.registerMixtureUsage = async (req, res) => {
       });
     }
 
+    // Verify project exists and is active
+    const [projectRows] = await connection.query('SELECT id, name, status FROM projects WHERE id = ?', [project_id]);
+    if (projectRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    }
+    if (projectRows[0].status !== 'active') {
+      await connection.rollback();
+      return res.status(400).json({ message: `El proyecto "${projectRows[0].name}" no está activo (estado: ${projectRows[0].status}).` });
+    }
+
     // Insert mixture usage record
     await connection.query(
-      'INSERT INTO mixture_usages (mixture_id, total_quantity, usage_date, responsible, user_id, notes) VALUES (?, ?, ?, ?, ?, ?)',
-      [id, totalQty, usage_date, responsible, req.user.id, notes || null]
+      'INSERT INTO mixture_usages (mixture_id, total_quantity, usage_date, responsible, project_id, user_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, totalQty, usage_date, responsible, project_id, req.user.id, notes || null]
     );
 
     // Deduct stock from each component material and register in usages table
     for (const ded of deductions) {
       // Insert into general usages table for history visibility
       await connection.query(
-        'INSERT INTO usages (material_id, quantity, usage_date, responsible, user_id) VALUES (?, ?, ?, ?, ?)',
-        [ded.material_id, ded.required_qty, usage_date, `Mezcla: ${mixture.name} — ${responsible}`, req.user.id]
+        'INSERT INTO usages (material_id, quantity, usage_date, responsible, project_id, user_id) VALUES (?, ?, ?, ?, ?, ?)',
+        [ded.material_id, ded.required_qty, usage_date, `Mezcla: ${mixture.name} — ${responsible}`, project_id, req.user.id]
       );
 
       // Deduct stock

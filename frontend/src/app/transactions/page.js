@@ -13,7 +13,8 @@ import {
   ShoppingBag,
   History,
   FileCheck,
-  Search
+  Search,
+  FolderKanban
 } from 'lucide-react';
 
 export default function TransactionsPage() {
@@ -34,7 +35,9 @@ export default function TransactionsPage() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [details, setDetails] = useState(''); // Responsible
   const [suppliersList, setSuppliersList] = useState([]);
+  const [projectsList, setProjectsList] = useState([]);
   const [providerId, setProviderId] = useState('');
+  const [projectId, setProjectId] = useState('');
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -51,10 +54,11 @@ export default function TransactionsPage() {
 
   const fetchInitialData = async () => {
     try {
-      const [matRes, histRes, supRes] = await Promise.all([
+      const [matRes, histRes, supRes, projRes] = await Promise.all([
         apiFetch('/materials'),
         apiFetch('/transactions/history'),
-        apiFetch('/suppliers')
+        apiFetch('/suppliers'),
+        apiFetch('/projects?status=active')
       ]);
 
       if (matRes.ok && histRes.ok && supRes.ok) {
@@ -64,6 +68,9 @@ export default function TransactionsPage() {
         setMaterials(matData);
         setHistory(histData);
         setSuppliersList(supData);
+      }
+      if (projRes.ok) {
+        setProjectsList(await projRes.json());
       }
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -78,6 +85,7 @@ export default function TransactionsPage() {
     setQuantity('');
     setDetails('');
     setProviderId('');
+    setProjectId('');
     setFormError('');
     setFormSuccess('');
   };
@@ -90,7 +98,7 @@ export default function TransactionsPage() {
 
     const isPurchase = activeForm === 'compra';
     
-    if (!materialId || !quantity || !date || (isPurchase ? !providerId : !details)) {
+    if (!materialId || !quantity || !date || (isPurchase ? !providerId : (!details || !projectId))) {
       setFormError('Todos los campos son obligatorios.');
       setSubmitting(false);
       return;
@@ -108,7 +116,7 @@ export default function TransactionsPage() {
       const endpoint = isPurchase ? '/transactions/purchases' : '/transactions/usages';
       const payload = isPurchase 
         ? { material_id: materialId, quantity: qty, purchase_date: date, provider_id: providerId }
-        : { material_id: materialId, quantity: qty, usage_date: date, responsible: details };
+        : { material_id: materialId, quantity: qty, usage_date: date, responsible: details, project_id: projectId };
 
       const res = await apiFetch(endpoint, {
         method: 'POST',
@@ -127,6 +135,7 @@ export default function TransactionsPage() {
       setQuantity('');
       setDetails('');
       setProviderId('');
+      setProjectId('');
 
       // Refresh transactions and stock
       await fetchInitialData();
@@ -289,6 +298,35 @@ export default function TransactionsPage() {
                 </div>
               )}
 
+              {activeForm === 'gasto' && (
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                      Proyecto / Obra *
+                    </label>
+                    <a href="/projects" className="text-[10px] text-indigo-600 hover:text-indigo-500 font-bold">
+                      + Crear Proyecto
+                    </a>
+                  </div>
+                  <div className="relative">
+                    <FolderKanban className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
+                    <select
+                      required
+                      value={projectId}
+                      onChange={(e) => setProjectId(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:border-blue-600 transition-all"
+                    >
+                      <option value="">-- Elige un proyecto --</option>
+                      {projectsList.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}{p.location ? ` — ${p.location}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={submitting}
@@ -356,6 +394,12 @@ export default function TransactionsPage() {
                           {isPurchase ? 'Proveedor: ' : 'Responsable: '}
                           <span className="font-semibold text-slate-700">{tx.details}</span>
                         </p>
+                        {!isPurchase && tx.project_name && (
+                          <p className="text-[10px] text-indigo-600 font-semibold mt-0.5 flex items-center">
+                            <FolderKanban className="h-3 w-3 mr-0.5" />
+                            {tx.project_name}
+                          </p>
+                        )}
                         <p className="text-[10px] text-slate-400 mt-1">
                           Registrado por: {tx.user_name || 'Desconocido'}
                         </p>

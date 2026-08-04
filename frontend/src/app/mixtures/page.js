@@ -20,7 +20,8 @@ import {
   Percent,
   Package,
   ArrowLeft,
-  History
+  History,
+  FolderKanban
 } from 'lucide-react';
 
 function MixturesContent() {
@@ -63,6 +64,8 @@ function MixturesContent() {
   const [usageError, setUsageError] = useState('');
   const [usageSuccess, setUsageSuccess] = useState('');
   const [usageSubmitting, setUsageSubmitting] = useState(false);
+  const [usageProjectId, setUsageProjectId] = useState('');
+  const [projectsList, setProjectsList] = useState([]);
 
   // Delete confirmation
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
@@ -102,13 +105,15 @@ function MixturesContent() {
 
   const fetchData = async () => {
     try {
-      const [mixRes, matRes] = await Promise.all([
+      const [mixRes, matRes, projRes] = await Promise.all([
         apiFetch('/mixtures'),
-        apiFetch('/materials')
+        apiFetch('/materials'),
+        apiFetch('/projects?status=active')
       ]);
 
       if (mixRes.ok) setMixtures(await mixRes.json());
       if (matRes.ok) setMaterials(await matRes.json());
+      if (projRes.ok) setProjectsList(await projRes.json());
     } catch (err) {
       console.error('Error fetching data:', err);
     } finally {
@@ -259,6 +264,7 @@ function MixturesContent() {
     setUsageNotes('');
     setUsageError('');
     setUsageSuccess('');
+    setUsageProjectId('');
     setIsUsageModalOpen(true);
   };
 
@@ -286,8 +292,8 @@ function MixturesContent() {
     setUsageSuccess('');
     setUsageSubmitting(true);
 
-    if (!usageQuantity || !usageDate || !usageResponsible) {
-      setUsageError('Cantidad, fecha y responsable son obligatorios.');
+    if (!usageQuantity || !usageDate || !usageResponsible || !usageProjectId) {
+      setUsageError('Cantidad, fecha, responsable y proyecto son obligatorios.');
       setUsageSubmitting(false);
       return;
     }
@@ -299,7 +305,8 @@ function MixturesContent() {
           total_quantity: parseFloat(usageQuantity),
           usage_date: usageDate,
           responsible: usageResponsible,
-          notes: usageNotes
+          notes: usageNotes,
+          project_id: usageProjectId
         })
       });
 
@@ -589,6 +596,32 @@ function MixturesContent() {
                 onChange={(e) => setUsageNotes(e.target.value)} rows={2}
                 className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-violet-600 transition-all resize-none"
               />
+            </div>
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Proyecto / Obra *
+                </label>
+                <a href="/projects" className="text-[10px] text-indigo-600 hover:text-indigo-500 font-bold">
+                  + Crear Proyecto
+                </a>
+              </div>
+              <div className="relative">
+                <FolderKanban className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
+                <select
+                  required
+                  value={usageProjectId}
+                  onChange={(e) => setUsageProjectId(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:border-violet-600 transition-all"
+                >
+                  <option value="">-- Elige un proyecto --</option>
+                  {projectsList.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}{p.location ? ` — ${p.location}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             {/* Deduction Preview */}
             {usageQuantity && parseFloat(usageQuantity) > 0 && (

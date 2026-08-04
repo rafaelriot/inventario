@@ -56,10 +56,10 @@ exports.addPurchase = async (req, res) => {
 
 // Register usage (Salida / Gasto)
 exports.addUsage = async (req, res) => {
-  const { material_id, quantity, usage_date, responsible } = req.body;
+  const { material_id, quantity, usage_date, responsible, project_id } = req.body;
 
-  if (!material_id || !quantity || !usage_date || !responsible) {
-    return res.status(400).json({ message: 'Todos los campos son obligatorios.' });
+  if (!material_id || !quantity || !usage_date || !responsible || !project_id) {
+    return res.status(400).json({ message: 'Todos los campos son obligatorios (incluido proyecto).' });
   }
 
   const qty = parseFloat(quantity);
@@ -86,10 +86,21 @@ exports.addUsage = async (req, res) => {
       });
     }
 
+    // Verify project exists and is active
+    const [projects] = await connection.query('SELECT id, name, status FROM projects WHERE id = ?', [project_id]);
+    if (projects.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Proyecto no encontrado.' });
+    }
+    if (projects[0].status !== 'active') {
+      await connection.rollback();
+      return res.status(400).json({ message: `El proyecto "${projects[0].name}" no está activo (estado: ${projects[0].status}).` });
+    }
+
     // Insert usage
     await connection.query(
-      'INSERT INTO usages (material_id, quantity, usage_date, responsible, user_id) VALUES (?, ?, ?, ?, ?)',
-      [material_id, qty, usage_date, responsible, req.user.id]
+      'INSERT INTO usages (material_id, quantity, usage_date, responsible, project_id, user_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [material_id, qty, usage_date, responsible, project_id, req.user.id]
     );
 
     // Update stock
@@ -122,7 +133,8 @@ exports.getHistory = async (req, res) => {
         m.name AS material_name,
         m.unit,
         u.name AS user_name,
-        p.created_at
+        p.created_at,
+        NULL AS project_name
       FROM purchases p
       JOIN materials m ON p.material_id = m.id
       LEFT JOIN users u ON p.user_id = u.id
@@ -138,10 +150,12 @@ exports.getHistory = async (req, res) => {
         m.name AS material_name,
         m.unit,
         u.name AS user_name,
-        g.created_at
+        g.created_at,
+        pr.name AS project_name
       FROM usages g
       JOIN materials m ON g.material_id = m.id
       LEFT JOIN users u ON g.user_id = u.id
+      LEFT JOIN projects pr ON g.project_id = pr.id
       
       ORDER BY date DESC, created_at DESC
       LIMIT 100;

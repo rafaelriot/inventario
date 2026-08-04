@@ -163,6 +163,21 @@ async function initDatabase() {
         );
       `);
 
+      // Create Projects table (Obras/Construcciones)
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS projects (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(150) NOT NULL UNIQUE,
+          description TEXT,
+          location VARCHAR(200),
+          status ENUM('active', 'paused', 'completed') NOT NULL DEFAULT 'active',
+          created_by INT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+      `);
+
       // Check if truck_number column exists in tickets
       const [columnsTruck] = await conn.query('SHOW COLUMNS FROM tickets LIKE "truck_number"');
       if (columnsTruck.length === 0) {
@@ -185,10 +200,24 @@ async function initDatabase() {
       }
 
       // Check if category column exists
-      const [columnsCat] = await conn.query('SHOW COLUMNS FROM materials LIKE "category"');
+      const [columnsCat] = await conn.query('SHOW COLUMNS FROM materials LIKE \"category\"');
       if (columnsCat.length === 0) {
-        await conn.query('ALTER TABLE materials ADD COLUMN category VARCHAR(50) NOT NULL DEFAULT "Otros"');
+        await conn.query('ALTER TABLE materials ADD COLUMN category VARCHAR(50) NOT NULL DEFAULT \"Otros\"');
         console.log('Database upgraded: added category to materials table');
+      }
+
+      // Check if project_id column exists in usages
+      const [columnsProjectUsages] = await conn.query('SHOW COLUMNS FROM usages LIKE "project_id"');
+      if (columnsProjectUsages.length === 0) {
+        await conn.query('ALTER TABLE usages ADD COLUMN project_id INT DEFAULT NULL, ADD FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL');
+        console.log('Database upgraded: added project_id to usages table');
+      }
+
+      // Check if project_id column exists in mixture_usages
+      const [columnsProjectMix] = await conn.query('SHOW COLUMNS FROM mixture_usages LIKE "project_id"');
+      if (columnsProjectMix.length === 0) {
+        await conn.query('ALTER TABLE mixture_usages ADD COLUMN project_id INT DEFAULT NULL, ADD FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL');
+        console.log('Database upgraded: added project_id to mixture_usages table');
       }
 
       // Check if provider_id column exists in purchases
