@@ -2,10 +2,37 @@ const { pool } = require('../config/db');
 
 exports.getMaterials = async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      'SELECT *, (current_stock <= min_stock AND current_stock > 0) AS is_low_stock, (current_stock = 0) AS is_out_of_stock FROM materials ORDER BY name ASC'
-    );
-    res.json(rows);
+    const { project_id } = req.query;
+
+    let query = `
+      SELECT 
+        m.*, 
+        (m.current_stock <= m.min_stock AND m.current_stock > 0) AS is_low_stock, 
+        (m.current_stock = 0) AS is_out_of_stock,
+        COALESCE(u_stats.total_used_qty, 0) AS total_used_qty,
+        COALESCE(u_stats.total_spent_val, 0) AS total_spent_val
+      FROM materials m
+      LEFT JOIN (
+        SELECT 
+          material_id,
+          SUM(quantity) AS total_used_qty,
+          SUM(quantity * m_sub.unit_price) AS total_spent_val
+        FROM usages u_sub
+        JOIN materials m_sub ON u_sub.material_id = m_sub.id
+        ${project_id ? 'WHERE u_sub.project_id = ?' : ''}
+        GROUP BY material_id
+      ) u_stats ON m.id = u_stats.material_id
+      ORDER BY m.name ASC
+    `;
+
+    const params = project_id ? [project_id] : [];
+    const [rows] = await pool.query(query, params);
+
+    res.json(rows.map(r => ({
+      ...r,
+      total_used_qty: parseFloat(r.total_used_qty || 0),
+      total_spent_val: parseFloat(r.total_spent_val || 0)
+    })));
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Error al obtener los materiales.' });

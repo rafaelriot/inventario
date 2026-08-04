@@ -16,7 +16,9 @@ import {
   PauseCircle,
   Clock,
   ArrowDownRight,
-  Filter
+  Filter,
+  Table as TableIcon,
+  LayoutGrid
 } from 'lucide-react';
 
 export default function ProjectConsumptionClient() {
@@ -32,6 +34,7 @@ export default function ProjectConsumptionClient() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [filterType, setFilterType] = useState(''); // '' | 'material' | 'mixture'
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'cards'
 
   useEffect(() => {
     if (projectId) fetchConsumption();
@@ -161,7 +164,7 @@ export default function ProjectConsumptionClient() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 text-center">
           <p className="text-2xl font-black text-indigo-600">{totals.total_records || 0}</p>
-          <p className="text-xs text-slate-500 font-medium mt-1">Total Registros</p>
+          <p className="text-xs text-slate-500 font-medium mt-1">Total Registros de Consumo</p>
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 text-center">
           <div className="flex items-center justify-center text-2xl font-black text-rose-600">
@@ -186,7 +189,7 @@ export default function ProjectConsumptionClient() {
             <div className="p-5 border-b border-slate-100">
               <h3 className="text-sm font-bold text-slate-900 flex items-center">
                 <Package className="h-4 w-4 mr-2 text-slate-500" />
-                Resumen por Material
+                Resumen Acumulado por Material
               </h3>
             </div>
             <div className="p-5 max-h-[500px] overflow-y-auto">
@@ -221,20 +224,47 @@ export default function ProjectConsumptionClient() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center">
                   <ArrowDownRight className="h-5 w-5 text-slate-500 mr-2" />
-                  Historial de Consumo
+                  Historial de Consumo del Proyecto
                   <span className="ml-2 text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full font-bold">
                     {filteredConsumption.length} registros
                   </span>
                 </h3>
-                <select
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:border-indigo-600 transition-all"
-                >
-                  <option value="">Todo</option>
-                  <option value="material">Solo Materiales</option>
-                  <option value="mixture">Solo Mezclas</option>
-                </select>
+
+                {/* View Switcher: Table vs Cards */}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value)}
+                    className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:border-indigo-600 transition-all"
+                  >
+                    <option value="">Todo</option>
+                    <option value="material">Solo Materiales</option>
+                    <option value="mixture">Solo Mezclas</option>
+                  </select>
+
+                  <div className="flex items-center bg-slate-100 p-1 rounded-xl shrink-0">
+                    <button
+                      onClick={() => setViewMode('table')}
+                      className={`p-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors ${
+                        viewMode === 'table' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                      }`}
+                      title="Vista de Tabla"
+                    >
+                      <TableIcon className="h-4 w-4 mr-1" />
+                      Tabla
+                    </button>
+                    <button
+                      onClick={() => setViewMode('cards')}
+                      className={`p-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors ${
+                        viewMode === 'cards' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                      }`}
+                      title="Vista de Tarjetas"
+                    >
+                      <LayoutGrid className="h-4 w-4 mr-1" />
+                      Cards
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Date Filter */}
@@ -298,7 +328,56 @@ export default function ProjectConsumptionClient() {
                   <p className="text-sm font-medium">No se encontraron consumos para este proyecto</p>
                   <p className="text-xs mt-1">Registra salidas de material asignadas a este proyecto.</p>
                 </div>
+              ) : viewMode === 'table' ? (
+
+                /* ─── VISTA EN TABLA ────────────────────────────────── */
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase tracking-wider text-slate-400 font-bold">
+                        <th className="py-3 px-3">Fecha</th>
+                        <th className="py-3 px-3">Tipo</th>
+                        <th className="py-3 px-3">Material / Mezcla</th>
+                        <th className="py-3 px-3 text-right">Cantidad Consumida</th>
+                        <th className="py-3 px-3">Responsable</th>
+                        <th className="py-3 px-3">Registrado Por</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredConsumption.map((item, idx) => {
+                        const isMixture = item.source_type === 'mixture';
+                        return (
+                          <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
+                            <td className="py-3 px-3 font-medium text-slate-500">
+                              {new Date(item.usage_date).toISOString().split('T')[0]}
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${isMixture ? 'bg-violet-50 text-violet-600' : 'bg-rose-50 text-rose-600'}`}>
+                                {isMixture ? 'Mezcla' : 'Material'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 font-bold text-slate-900">
+                              {item.material_name}
+                            </td>
+                            <td className="py-3 px-3 text-right font-black text-rose-600">
+                              -{parseFloat(item.quantity).toFixed(2)} {item.unit}
+                            </td>
+                            <td className="py-3 px-3 font-semibold text-slate-700">
+                              {item.responsible}
+                            </td>
+                            <td className="py-3 px-3 text-slate-400">
+                              {item.user_name || 'Desconocido'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
               ) : (
+
+                /* ─── VISTA EN CARDS ────────────────────────────────── */
                 <div className="space-y-3">
                   {filteredConsumption.map((item, idx) => {
                     const isMixture = item.source_type === 'mixture';

@@ -12,21 +12,29 @@ import {
   Search, 
   X,
   FileCheck,
-  ChevronRight
+  ChevronRight,
+  LayoutGrid,
+  Table as TableIcon,
+  FolderKanban,
+  DollarSign,
+  TrendingDown,
+  Activity
 } from 'lucide-react';
 
 export default function MaterialsPage() {
   const { user } = useAuth();
   const [materials, setMaterials] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [selectedProjectId, setSelectedProjectId] = useState('');
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'cards'
   
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit'
   const [currentMaterialId, setCurrentMaterialId] = useState(null);
   
-  // Filter states
   // Filter states
   const [filterStatus, setFilterStatus] = useState('all'); // 'all' | 'low' | 'ok'
   const [filterCategory, setFilterCategory] = useState('all');
@@ -42,12 +50,29 @@ export default function MaterialsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchMaterials();
+    fetchInitialData();
   }, []);
 
-  const fetchMaterials = async () => {
+  useEffect(() => {
+    fetchMaterials(selectedProjectId);
+  }, [selectedProjectId]);
+
+  const fetchInitialData = async () => {
     try {
-      const res = await apiFetch('/materials');
+      const projRes = await apiFetch('/projects');
+      if (projRes.ok) {
+        setProjects(await projRes.json());
+      }
+    } catch (err) {
+      console.error('Error fetching projects:', err);
+    }
+  };
+
+  const fetchMaterials = async (projectId = '') => {
+    setLoading(true);
+    try {
+      const url = projectId ? `/materials?project_id=${projectId}` : '/materials';
+      const res = await apiFetch(url);
       if (res.ok) {
         const data = await res.json();
         setMaterials(data);
@@ -117,7 +142,7 @@ export default function MaterialsPage() {
         throw new Error(data.message || 'Ocurrió un error en la solicitud.');
       }
 
-      await fetchMaterials();
+      await fetchMaterials(selectedProjectId);
       setIsModalOpen(false);
     } catch (err) {
       setError(err.message);
@@ -137,7 +162,7 @@ export default function MaterialsPage() {
       if (!res.ok) {
         throw new Error(data.message || 'Error al eliminar material.');
       }
-      fetchMaterials();
+      fetchMaterials(selectedProjectId);
     } catch (err) {
       alert(err.message);
     }
@@ -158,13 +183,18 @@ export default function MaterialsPage() {
     return true;
   });
 
+  // Calculate accumulated totals for top summary cards
+  const totalStockValuation = filteredMaterials.reduce((sum, m) => sum + (parseFloat(m.current_stock) * parseFloat(m.unit_price)), 0);
+  const totalSpentValuation = filteredMaterials.reduce((sum, m) => sum + parseFloat(m.total_spent_val || 0), 0);
+  const selectedProjectName = projects.find(p => String(p.id) === String(selectedProjectId))?.name;
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Inventario de Materiales</h1>
-          <p className="text-slate-500 text-sm mt-1">Catálogo y existencias disponibles en la obra.</p>
+          <p className="text-slate-500 text-sm mt-1">Catálogo, existencias en almacén y consumo acumulado.</p>
         </div>
         <button
           onClick={handleOpenCreate}
@@ -175,9 +205,50 @@ export default function MaterialsPage() {
         </button>
       </div>
 
-      {/* Filter and Search */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-4">
-        <div className="flex flex-col lg:flex-row gap-4 items-center justify-between w-full">
+      {/* Summary KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center">
+          <div className="h-11 w-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mr-4 shrink-0">
+            <Boxes className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Materiales</p>
+            <p className="text-xl font-black text-slate-900 mt-0.5">{filteredMaterials.length}</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center">
+          <div className="h-11 w-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mr-4 shrink-0">
+            <Activity className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Valoración Stock Almacén</p>
+            <p className="text-xl font-black text-emerald-600 mt-0.5">
+              ${totalStockValuation.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center">
+          <div className="h-11 w-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mr-4 shrink-0">
+            <TrendingDown className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              {selectedProjectId ? `Gasto en ${selectedProjectName}` : 'Gasto Total Historico'}
+            </p>
+            <p className="text-xl font-black text-rose-600 mt-0.5">
+              ${totalSpentValuation.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter, Search & View Toggle Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+        <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+          
+          {/* Project & Search Filters */}
           <div className="flex flex-col sm:flex-row gap-3 w-full lg:flex-1">
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
@@ -189,11 +260,28 @@ export default function MaterialsPage() {
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:bg-white transition-all"
               />
             </div>
+
+            {/* Filter by Project */}
+            <div className="relative sm:w-60">
+              <FolderKanban className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400 pointer-events-none" />
+              <select
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:border-blue-600 transition-all shrink-0 cursor-pointer"
+              >
+                <option value="">🌐 Todos los Proyectos (Global)</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    🏗️ {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             
             <select
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              className="w-full sm:w-52 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:border-blue-600 transition-all shrink-0"
+              className="w-full sm:w-48 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:border-blue-600 transition-all shrink-0"
             >
               <option value="all">Todas las Categorías</option>
               <option value="Cemento/Pegamentos">Cemento/Pegamentos</option>
@@ -205,41 +293,64 @@ export default function MaterialsPage() {
             </select>
           </div>
           
-          {/* Quick Filters */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl w-full sm:w-auto shrink-0">
-            <button
-              onClick={() => setFilterStatus('all')}
-              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                filterStatus === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Todos
-            </button>
-            <button
-              onClick={() => setFilterStatus('low')}
-              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                filterStatus === 'low' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Stock Bajo / Alertas
-            </button>
-            <button
-              onClick={() => setFilterStatus('ok')}
-              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                filterStatus === 'ok' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Stock Suficiente
-            </button>
+          {/* Quick Filters & View Switcher */}
+          <div className="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-end">
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl shrink-0">
+              <button
+                onClick={() => setFilterStatus('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  filterStatus === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                Todos
+              </button>
+              <button
+                onClick={() => setFilterStatus('low')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  filterStatus === 'low' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                Alertas
+              </button>
+              <button
+                onClick={() => setFilterStatus('ok')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  filterStatus === 'ok' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                Suficiente
+              </button>
+            </div>
+
+            {/* View Toggle: Table vs Cards */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl shrink-0">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors ${
+                  viewMode === 'table' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                }`}
+                title="Vista de Tabla"
+              >
+                <TableIcon className="h-4 w-4 mr-1" />
+                Tabla
+              </button>
+              <button
+                onClick={() => setViewMode('cards')}
+                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors ${
+                  viewMode === 'cards' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                }`}
+                title="Vista de Tarjetas"
+              >
+                <LayoutGrid className="h-4 w-4 mr-1" />
+                Cards
+              </button>
+            </div>
           </div>
-        </div>
-        
-        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider text-right">
-          Mostrando {filteredMaterials.length} de {materials.length} materiales
+
         </div>
       </div>
 
-      {/* Materials List */}
+      {/* Materials Main Content */}
       {loading ? (
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600"></div>
@@ -252,16 +363,109 @@ export default function MaterialsPage() {
             {searchQuery || filterStatus !== 'all' ? 'Prueba ajustando los filtros o la búsqueda.' : 'Comienza agregando un nuevo material al catálogo.'}
           </p>
         </div>
+      ) : viewMode === 'table' ? (
+
+        /* ─── VISTA EN TABLA ────────────────────────────────── */
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] uppercase tracking-wider text-slate-400 font-bold">
+                  <th className="py-4 px-5">Material</th>
+                  <th className="py-4 px-4">Categoría</th>
+                  <th className="py-4 px-4 text-right">Stock Actual</th>
+                  <th className="py-4 px-4 text-right">P. Unitario</th>
+                  <th className="py-4 px-4 text-right">Valor Stock</th>
+                  <th className="py-4 px-4 text-right">
+                    {selectedProjectId ? `Gastado (${selectedProjectName})` : 'Gastado Total ($)'}
+                  </th>
+                  <th className="py-4 px-4 text-center">Estado</th>
+                  <th className="py-4 px-5 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredMaterials.map((m) => {
+                  const isLow = m.is_low_stock === 1 || parseFloat(m.current_stock) <= parseFloat(m.min_stock);
+                  const isOut = m.is_out_of_stock === 1 || parseFloat(m.current_stock) === 0;
+                  const stockVal = parseFloat(m.current_stock) * parseFloat(m.unit_price);
+
+                  return (
+                    <tr key={m.id} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-4 px-5">
+                        <p className="font-bold text-slate-900">{m.name}</p>
+                        <p className="text-[10px] text-slate-400 font-medium">Mín. Alerta: {m.min_stock} {m.unit}</p>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="inline-block text-[10px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+                          {m.category || 'Otros'}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4 text-right">
+                        <span className="font-black text-slate-900">{parseFloat(m.current_stock)}</span>
+                        <span className="text-xs text-slate-400 ml-1">{m.unit}</span>
+                      </td>
+                      <td className="py-4 px-4 text-right font-medium text-slate-600">
+                        ${parseFloat(m.unit_price).toFixed(2)}
+                      </td>
+                      <td className="py-4 px-4 text-right font-bold text-emerald-600">
+                        ${stockVal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-4 px-4 text-right font-bold text-rose-600">
+                        ${m.total_spent_val.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <p className="text-[10px] text-slate-400 font-normal">{m.total_used_qty} {m.unit}</p>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        {isOut ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-700">
+                            <AlertTriangle className="h-3 w-3 mr-1" /> Agotado
+                          </span>
+                        ) : isLow ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700">
+                            <AlertTriangle className="h-3 w-3 mr-1" /> Stock Bajo
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700">
+                            Suficiente
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4 px-5 text-right">
+                        <div className="flex items-center justify-end space-x-1">
+                          <button
+                            onClick={() => handleOpenEdit(m)}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Editar Material"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          {user.role === 'admin' && (
+                            <button
+                              onClick={() => handleDelete(m.id, m.name)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Eliminar Material"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       ) : (
+
+        /* ─── VISTA EN CARDS ────────────────────────────────── */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredMaterials.map((m) => {
             const isLow = m.is_low_stock === 1 || parseFloat(m.current_stock) <= parseFloat(m.min_stock);
             const isOut = m.is_out_of_stock === 1 || parseFloat(m.current_stock) === 0;
-            
-            // Calculate a percentage for progress bar
             const threshold = parseFloat(m.min_stock);
             const current = parseFloat(m.current_stock);
-            // We set 100% as min_stock * 2.5 to show space, or 100% if empty
             const maxRef = threshold > 0 ? threshold * 2.5 : 10;
             const percentage = Math.min((current / maxRef) * 100, 100);
 
@@ -306,7 +510,7 @@ export default function MaterialsPage() {
                     </div>
                   </div>
 
-                  {/* Visual Progress Bar (UX Addition) */}
+                  {/* Progress bar */}
                   <div className="mt-3.5 space-y-1">
                     <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                       <div 
@@ -317,14 +521,11 @@ export default function MaterialsPage() {
                       ></div>
                     </div>
                     <div className="flex justify-between text-[10px] text-slate-400 font-medium">
-                      <span>0%</span>
                       <span>Stock Mínimo: {threshold} {m.unit}</span>
+                      <span className="text-rose-600 font-bold">
+                        Gastado: ${m.total_spent_val.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
                     </div>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-slate-50 flex justify-between items-center text-xs text-slate-500">
-                    <span>Unidad de medida:</span>
-                    <span className="font-semibold text-slate-700">{m.unit}</span>
                   </div>
                 </div>
 
@@ -352,17 +553,17 @@ export default function MaterialsPage() {
         </div>
       )}
 
-      {/* Modal - Create/Edit Material */}
+      {/* Modal Crear / Editar Material */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-100 shadow-2xl overflow-hidden animate-slide-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-              <h2 className="text-base font-bold text-slate-900">
-                {modalMode === 'create' ? 'Agregar Nuevo Material' : 'Editar Datos del Material'}
-              </h2>
-              <button 
+              <h3 className="font-bold text-slate-900">
+                {modalMode === 'edit' ? 'Editar Material' : 'Nuevo Material'}
+              </h3>
+              <button
                 onClick={handleCloseModal}
-                className="p-1 rounded-md text-slate-400 hover:text-slate-600 transition-colors"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -370,7 +571,7 @@ export default function MaterialsPage() {
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               {error && (
-                <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-xs font-medium">
+                <div className="p-3 bg-rose-50 border border-rose-100 text-rose-700 text-xs font-semibold rounded-xl">
                   {error}
                 </div>
               )}
@@ -382,118 +583,109 @@ export default function MaterialsPage() {
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Cemento Portland Tipo 1"
+                  placeholder="Ej. Cemento Gris Tolteca"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 transition-all"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                  Categoría
-                </label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:border-blue-600 transition-all"
-                >
-                  <option value="Cemento/Pegamentos">Cemento/Pegamentos</option>
-                  <option value="Metales/Aceros">Metales/Aceros</option>
-                  <option value="Áridos/Arenas">Áridos/Arenas</option>
-                  <option value="Herramientas">Herramientas</option>
-                  <option value="Aditivos/Químicos">Aditivos/Químicos</option>
-                  <option value="Otros">Otros</option>
-                </select>
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                    Unidad de Medida
+                    Categoría
                   </label>
                   <select
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
-                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:border-blue-600 transition-all"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:border-blue-600 transition-all"
                   >
-                    <option value="Sacos">Sacos</option>
-                    <option value="Piezas">Piezas</option>
-                    <option value="Kilogramos">Kilogramos</option>
-                    <option value="Metros Cúbicos">Metros Cúbicos</option>
-                    <option value="Metros Lineales">Metros Lineales</option>
-                    <option value="Galones">Galones</option>
-                    <option value="Libras">Libras</option>
+                    <option value="Cemento/Pegamentos">Cemento/Pegamentos</option>
+                    <option value="Metales/Aceros">Metales/Aceros</option>
+                    <option value="Áridos/Arenas">Áridos/Arenas</option>
+                    <option value="Herramientas">Herramientas</option>
+                    <option value="Aditivos/Químicos">Aditivos/Químicos</option>
+                    <option value="Otros">Otros</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                    Stock Mínimo (Alerta)
+                    Unidad de Medida
                   </label>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
+                    type="text"
                     required
-                    value={minStock}
-                    onChange={(e) => setMinStock(e.target.value)}
-                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 transition-all"
+                    placeholder="Ej. Sacos, m³, Pza"
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 transition-all"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                    Precio Unitario ($)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    required
-                    value={unitPrice}
-                    onChange={(e) => setUnitPrice(e.target.value)}
-                    className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 transition-all"
-                  />
-                </div>
-
-                {modalMode === 'create' ? (
+              <div className="grid grid-cols-3 gap-3">
+                {modalMode === 'create' && (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
                       Stock Inicial
                     </label>
                     <input
                       type="number"
                       min="0"
                       step="0.01"
+                      placeholder="0"
                       value={initialStock}
                       onChange={(e) => setInitialStock(e.target.value)}
-                      className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 transition-all"
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 transition-all"
                     />
                   </div>
-                ) : (
-                  <div className="flex items-end justify-start pb-2">
-                    <p className="text-[10px] text-slate-400">El stock se modifica registrando compras o gastos.</p>
-                  </div>
                 )}
+
+                <div className={modalMode === 'edit' ? 'col-span-1' : ''}>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Stock Mínimo
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="10"
+                    value={minStock}
+                    onChange={(e) => setMinStock(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 transition-all"
+                  />
+                </div>
+
+                <div className={modalMode === 'edit' ? 'col-span-2' : ''}>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Precio Unitario ($)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={unitPrice}
+                    onChange={(e) => setUnitPrice(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 transition-all"
+                  />
+                </div>
               </div>
 
-              <div className="pt-4 flex items-center justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-semibold hover:bg-slate-50 transition-colors"
-                >
-                  Cancelar
-                </button>
+              <div className="pt-2">
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm flex items-center justify-center"
                 >
-                  {submitting ? 'Guardando...' : modalMode === 'create' ? 'Crear Material' : 'Actualizar'}
+                  {submitting ? (
+                    <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : modalMode === 'edit' ? (
+                    'Guardar Cambios'
+                  ) : (
+                    'Crear Material'
+                  )}
                 </button>
               </div>
             </form>
