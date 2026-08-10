@@ -51,6 +51,7 @@ function MixturesContent() {
   const [formDescription, setFormDescription] = useState('');
   const [formComponents, setFormComponents] = useState([{ material_id: '', percentage: '' }]);
   const [formError, setFormError] = useState('');
+  const [formSuccess, setFormSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Confirmation for over 100%
@@ -412,13 +413,22 @@ function MixturesContent() {
               </p>
             </div>
           </div>
-          <button
-            onClick={() => openUsageModal(detailMixture)}
-            className="flex items-center justify-center px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold shadow-sm transition-all"
-          >
-            <Send className="mr-2 h-4 w-4" />
-            Registrar Envío
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => openEditModal(detailMixture)}
+              className="flex items-center justify-center px-4 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-bold shadow-sm transition-all"
+            >
+              <Edit2 className="mr-2 h-4 w-4 text-blue-600" />
+              Editar Mezcla
+            </button>
+            <button
+              onClick={() => openUsageModal(detailMixture)}
+              className="flex items-center justify-center px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold shadow-sm transition-all"
+            >
+              <Send className="mr-2 h-4 w-4" />
+              Registrar Envío
+            </button>
+          </div>
         </div>
 
         {detailMixture.description && (
