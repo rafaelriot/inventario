@@ -42,6 +42,30 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date() });
 });
 
+// Serve frontend static export if present or root fallback route
+const fs = require('fs');
+const path = require('path');
+const publicDir = path.join(__dirname, 'public');
+const frontendOutDir = path.join(__dirname, '../frontend/out');
+
+if (fs.existsSync(publicDir)) {
+  app.use(express.static(publicDir));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/health')) return next();
+    res.sendFile(path.join(publicDir, 'index.html'));
+  });
+} else if (fs.existsSync(frontendOutDir)) {
+  app.use(express.static(frontendOutDir));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/health')) return next();
+    res.sendFile(path.join(frontendOutDir, 'index.html'));
+  });
+} else {
+  app.get('/', (req, res) => {
+    res.send('<h1>API de Inventario de Obra</h1><p>El servidor Backend está activo. Para ver la interfaz web, sube los archivos compilados del frontend a la carpeta public_html de Hostinger.</p>');
+  });
+}
+
 // Start Server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
