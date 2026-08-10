@@ -1,0 +1,9 @@
+RewriteEngine On
+
+# Rewrite clean URLs to point to HTML files (e.g. /materials -> /materials.html)
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}\.html -f
+RewriteRule ^(.*)$ $1.html [NC,L]
+
+# Redirect 404 errors to the static 404 page
+ErrorDocument 404 /404.html
