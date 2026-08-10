@@ -73,10 +73,10 @@ exports.createMixture = async (req, res) => {
     return res.status(400).json({ message: 'Nombre, unidad y al menos un componente son obligatorios.' });
   }
 
-  // Validate percentages sum to 100
+  // Validate percentages sum to at least 100
   const totalPercentage = components.reduce((sum, c) => sum + parseFloat(c.percentage || 0), 0);
-  if (Math.abs(totalPercentage - 100) > 0.01) {
-    return res.status(400).json({ message: `Los porcentajes deben sumar 100%. Suma actual: ${totalPercentage.toFixed(2)}%` });
+  if (totalPercentage < 99.99) {
+    return res.status(400).json({ message: `Los porcentajes de la mezcla deben sumar al menos 100%. Suma actual: ${totalPercentage.toFixed(2)}%` });
   }
 
   // Validate no duplicate materials
@@ -141,10 +141,10 @@ exports.updateMixture = async (req, res) => {
     return res.status(400).json({ message: 'Nombre, unidad y al menos un componente son obligatorios.' });
   }
 
-  // Validate percentages sum to 100
+  // Validate percentages sum to at least 100
   const totalPercentage = components.reduce((sum, c) => sum + parseFloat(c.percentage || 0), 0);
-  if (Math.abs(totalPercentage - 100) > 0.01) {
-    return res.status(400).json({ message: `Los porcentajes deben sumar 100%. Suma actual: ${totalPercentage.toFixed(2)}%` });
+  if (totalPercentage < 99.99) {
+    return res.status(400).json({ message: `Los porcentajes de la mezcla deben sumar al menos 100%. Suma actual: ${totalPercentage.toFixed(2)}%` });
   }
 
   // Validate no duplicate materials

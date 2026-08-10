@@ -51,8 +51,11 @@ function MixturesContent() {
   const [formDescription, setFormDescription] = useState('');
   const [formComponents, setFormComponents] = useState([{ material_id: '', percentage: '' }]);
   const [formError, setFormError] = useState('');
-  const [formSuccess, setFormSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Confirmation for over 100%
+  const [showOver100Modal, setShowOver100Modal] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState(null);
 
   // Usage modal
   const [isUsageModalOpen, setIsUsageModalOpen] = useState(false);
@@ -149,6 +152,8 @@ function MixturesContent() {
     setFormComponents([{ material_id: '', percentage: '' }]);
     setFormError('');
     setFormSuccess('');
+    setShowOver100Modal(false);
+    setPendingPayload(null);
     setIsModalOpen(true);
   };
 
@@ -166,11 +171,15 @@ function MixturesContent() {
     );
     setFormError('');
     setFormSuccess('');
+    setShowOver100Modal(false);
+    setPendingPayload(null);
     setIsModalOpen(true);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
+    setShowOver100Modal(false);
+    setPendingPayload(null);
     setFormError('');
     setFormSuccess('');
   };
@@ -192,35 +201,57 @@ function MixturesContent() {
 
   const totalPercentage = formComponents.reduce((sum, c) => sum + (parseFloat(c.percentage) || 0), 0);
 
+  const executeSaveMixture = async (payloadToSave) => {
+    setSubmitting(true);
+    setFormError('');
+    setFormSuccess('');
+
+    try {
+      const url = modalMode === 'create' ? '/mixtures' : `/mixtures/${currentMixtureId}`;
+      const method = modalMode === 'create' ? 'POST' : 'PUT';
+
+      const res = await apiFetch(url, { method, body: JSON.stringify(payloadToSave) });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.message);
+
+      setFormSuccess(data.message);
+      await fetchData();
+      if (detailId) await fetchDetail(detailId);
+      setShowOver100Modal(false);
+      setPendingPayload(null);
+      setTimeout(() => closeModal(), 1200);
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleSaveMixture = async (e) => {
     e.preventDefault();
     setFormError('');
     setFormSuccess('');
-    setSubmitting(true);
 
     if (!formName || !formUnit) {
       setFormError('Nombre y unidad son obligatorios.');
-      setSubmitting(false);
       return;
     }
 
     const validComponents = formComponents.filter(c => c.material_id && c.percentage);
     if (validComponents.length === 0) {
       setFormError('Agrega al menos un componente.');
-      setSubmitting(false);
       return;
     }
 
-    if (Math.abs(totalPercentage - 100) > 0.01) {
-      setFormError(`Los porcentajes deben sumar 100%. Suma actual: ${totalPercentage.toFixed(2)}%`);
-      setSubmitting(false);
+    if (totalPercentage < 99.99) {
+      setFormError(`Los componentes de la mezcla deben sumar al menos 100%. Suma actual: ${totalPercentage.toFixed(2)}% (faltan ${(100 - totalPercentage).toFixed(2)}%)`);
       return;
     }
 
     const ids = validComponents.map(c => c.material_id);
     if (new Set(ids).size !== ids.length) {
       setFormError('No puedes agregar el mismo material más de una vez.');
-      setSubmitting(false);
       return;
     }
 
@@ -234,24 +265,13 @@ function MixturesContent() {
       }))
     };
 
-    try {
-      const url = modalMode === 'create' ? '/mixtures' : `/mixtures/${currentMixtureId}`;
-      const method = modalMode === 'create' ? 'POST' : 'PUT';
-
-      const res = await apiFetch(url, { method, body: JSON.stringify(payload) });
-      const data = await res.json();
-
-      if (!res.ok) throw new Error(data.message);
-
-      setFormSuccess(data.message);
-      await fetchData();
-      if (detailId) await fetchDetail(detailId);
-      setTimeout(() => closeModal(), 1200);
-    } catch (err) {
-      setFormError(err.message);
-    } finally {
-      setSubmitting(false);
+    if (totalPercentage > 100.01) {
+      setPendingPayload(payload);
+      setShowOver100Modal(true);
+      return;
     }
+
+    await executeSaveMixture(payload);
   };
 
   // ─── Usage (Shipment) Modal ──────────────────────────────
@@ -684,6 +704,90 @@ function MixturesContent() {
     );
   }
 
+  function renderOver100ConfirmationModal() {
+    if (!showOver100Modal || !pendingPayload) return null;
+
+    const validComps = formComponents.filter(c => c.material_id && c.percentage);
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg border border-rose-100 overflow-hidden">
+          {/* Header */}
+          <div className="bg-rose-50 border-b border-rose-100 p-6 flex items-start gap-4">
+            <div className="h-10 w-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Confirmación por Exceso / Merma</h3>
+              <p className="text-xs text-rose-700 mt-1 leading-relaxed">
+                La suma de los componentes supera el 100% (<strong>{totalPercentage.toFixed(2)}%</strong>). En obras de construcción esto se aplica para contemplar desperdicios y mermas del preparado.
+              </p>
+            </div>
+          </div>
+
+          {/* Body: Component breakdown */}
+          <div className="p-6 space-y-4">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              Desglose de Componentes de la Mezcla:
+            </h4>
+            <div className="bg-slate-50 rounded-xl border border-slate-200 divide-y divide-slate-100 max-h-56 overflow-y-auto">
+              {validComps.map((comp, idx) => {
+                const mat = materials.find(m => String(m.id) === String(comp.material_id));
+                const pct = parseFloat(comp.percentage) || 0;
+                return (
+                  <div key={idx} className="flex items-center justify-between p-3 text-xs">
+                    <div className="flex items-center gap-2">
+                      <div className={`h-2.5 w-2.5 rounded-full ${componentColors[idx % componentColors.length]}`} />
+                      <span className="font-semibold text-slate-800">{mat?.name || `Material #${comp.material_id}`}</span>
+                      <span className="text-slate-400 text-[10px]">({mat?.unit})</span>
+                    </div>
+                    <span className="font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                      {pct.toFixed(2)}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Total Row */}
+            <div className="flex items-center justify-between p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold">
+              <span className="text-rose-900">Porcentaje Total Calculado:</span>
+              <span className="text-rose-700 text-sm font-black">{totalPercentage.toFixed(2)}%</span>
+            </div>
+
+            <p className="text-xs font-medium text-slate-600 text-center pt-2">
+              ¿Deseas aceptar y guardar la mezcla con estos porcentajes?
+            </p>
+
+            {/* Actions */}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowOver100Modal(false)}
+                disabled={submitting}
+                className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all"
+              >
+                Cancelar / Modificar
+              </button>
+              <button
+                type="button"
+                onClick={() => executeSaveMixture(pendingPayload)}
+                disabled={submitting}
+                className="py-2.5 px-4 bg-rose-600 hover:bg-rose-500 disabled:bg-rose-800 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center justify-center"
+              >
+                {submitting ? (
+                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  'Sí, Aceptar y Guardar'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -887,7 +991,7 @@ function MixturesContent() {
                       <div className="w-28 shrink-0">
                         <div className="relative">
                           <input
-                            type="number" min="0.01" max="100" step="0.01" placeholder="0.00"
+                            type="number" min="0.01" step="0.01" placeholder="0.00"
                             value={comp.percentage} onChange={(e) => updateComponent(index, 'percentage', e.target.value)}
                             className="w-full px-3 py-2 pr-8 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-violet-600 transition-all"
                           />
@@ -908,25 +1012,39 @@ function MixturesContent() {
                 <div className="mt-4">
                   <div className="flex items-center justify-between text-xs mb-1.5">
                     <span className="font-semibold text-slate-500">Porcentaje Total</span>
-                    <span className={`font-black ${Math.abs(totalPercentage - 100) <= 0.01 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    <span className={`font-black ${
+                      totalPercentage < 99.99 
+                        ? 'text-amber-600' 
+                        : Math.abs(totalPercentage - 100) <= 0.01 
+                          ? 'text-emerald-600' 
+                          : 'text-rose-600 flex items-center font-black'
+                    }`}>
                       {totalPercentage.toFixed(2)}%
+                      {totalPercentage > 100.01 && <AlertTriangle className="h-3.5 w-3.5 ml-1 text-rose-500 inline" />}
                     </span>
                   </div>
                   <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${
-                        Math.abs(totalPercentage - 100) <= 0.01 ? 'bg-emerald-500' : totalPercentage > 100 ? 'bg-rose-500' : 'bg-amber-500'
+                        totalPercentage < 99.99
+                          ? 'bg-amber-500'
+                          : Math.abs(totalPercentage - 100) <= 0.01
+                            ? 'bg-emerald-500'
+                            : 'bg-rose-500'
                       }`}
                       style={{ width: `${Math.min(totalPercentage, 100)}%` }}
                     />
                   </div>
-                  {Math.abs(totalPercentage - 100) > 0.01 && (
-                    <p className="text-[10px] text-rose-500 font-medium mt-1 flex items-center">
-                      <AlertTriangle className="h-3 w-3 mr-1" />
-                      {totalPercentage < 100
-                        ? `Faltan ${(100 - totalPercentage).toFixed(2)}% para completar`
-                        : `Excede por ${(totalPercentage - 100).toFixed(2)}%`
-                      }
+                  {totalPercentage < 99.99 && (
+                    <p className="text-[10px] text-amber-600 font-medium mt-1 flex items-center">
+                      <AlertTriangle className="h-3 w-3 mr-1 shrink-0" />
+                      Faltan {(100 - totalPercentage).toFixed(2)}% para completar el 100% base
+                    </p>
+                  )}
+                  {totalPercentage > 100.01 && (
+                    <p className="text-[10px] text-rose-600 font-bold mt-1 flex items-center">
+                      <AlertTriangle className="h-3 w-3 mr-1 shrink-0" />
+                      Supera el 100% por merma (Exceso: +{(totalPercentage - 100).toFixed(2)}%). Al guardar se solicitará confirmación.
                     </p>
                   )}
                 </div>
@@ -943,6 +1061,9 @@ function MixturesContent() {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal for Over 100% */}
+      {renderOver100ConfirmationModal()}
 
       {/* Usage Modal (shared) */}
       {renderUsageModal()}
