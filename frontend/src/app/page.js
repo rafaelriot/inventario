@@ -138,14 +138,122 @@ export default function Dashboard() {
       const res = await apiFetch(`/transactions/advanced-dashboard?${params.toString()}`);
       if (res.ok) {
         setData(await res.json());
+      } else if (res.status === 404) {
+        // Fallback: endpoint not deployed yet, use legacy endpoints
+        await fetchLegacyDashboard();
       }
     } catch (error) {
       console.error('Error fetching dashboard:', error);
+      // Also try fallback on network errors
+      try { await fetchLegacyDashboard(); } catch (e2) { console.error('Legacy fallback also failed:', e2); }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
+
+  // Fallback: assemble dashboard data from legacy endpoints
+  const fetchLegacyDashboard = async () => {
+    const [sumRes, matRes, histRes] = await Promise.all([
+      selectedProjectId
+        ? apiFetch(`/transactions/project-summary/${selectedProjectId}`)
+        : apiFetch('/transactions/dashboard-summary'),
+      apiFetch('/materials'),
+      apiFetch('/transactions/history')
+    ]);
+
+    const materials = matRes.ok ? await matRes.json() : [];
+    const history = histRes.ok ? await histRes.json() : [];
+
+    // Build inventory from materials
+    const inventory = materials.map(m => {
+      const stock = parseFloat(m.current_stock);
+      const min = parseFloat(m.min_stock);
+      let status = 'normal';
+      if (stock === 0) status = 'out';
+      else if (stock <= min) status = 'low';
+      return {
+        id: m.id, name: m.name, unit: m.unit,
+        current_stock: stock, min_stock: min,
+        unit_price: parseFloat(m.unit_price),
+        category: m.category || 'Otros',
+        value: stock * parseFloat(m.unit_price),
+        status
+      };
+    });
+
+    if (selectedProjectId && sumRes.ok) {
+      const ps = await sumRes.json();
+      // Filter history for this project
+      const projHistory = history.filter(tx => tx.project_name === ps.project_name && tx.type === 'gasto');
+
+      setData({
+        inventory,
+        kpis: {
+          total_materials: materials.length,
+          low_stock: inventory.filter(m => m.status === 'low').length,
+          out_of_stock: inventory.filter(m => m.status === 'out').length,
+          total_valuation: inventory.reduce((s, m) => s + m.value, 0),
+          total_usage_records: ps.total_usage_records || 0,
+          distinct_materials_used: ps.total_materials_used || 0,
+          estimated_cost: ps.estimated_cost || 0,
+          total_shipments: ps.total_mixture_records || 0,
+          total_mixture_quantity: 0
+        },
+        consumption: projHistory.map((tx, i) => ({
+          id: i, quantity: tx.quantity, usage_date: tx.date,
+          responsible: tx.details, material_name: tx.material_name,
+          unit: tx.unit, unit_price: 0, line_cost: 0,
+          project_name: tx.project_name, user_name: tx.user_name
+        })),
+        top_materials: (ps.top_materials || []).map(m => ({
+          material_id: 0, name: m.name, unit: m.unit,
+          total_qty: m.total_qty, total_cost: m.cost, record_count: 0
+        })),
+        shipments: [],
+        project: { id: parseInt(selectedProjectId), name: ps.project_name, status: ps.project_status },
+        filters: { project_id: selectedProjectId, start_date: dateFrom || null, end_date: dateTo || null }
+      });
+    } else if (sumRes.ok) {
+      const gs = await sumRes.json();
+      const gastos = history.filter(tx => tx.type === 'gasto');
+
+      // Build top materials from history
+      const matMap = {};
+      gastos.forEach(tx => {
+        if (!matMap[tx.material_name]) matMap[tx.material_name] = { name: tx.material_name, unit: tx.unit, total_qty: 0, total_cost: 0, record_count: 0 };
+        matMap[tx.material_name].total_qty += parseFloat(tx.quantity);
+        matMap[tx.material_name].record_count++;
+      });
+      const topMats = Object.values(matMap).sort((a, b) => b.total_qty - a.total_qty).slice(0, 15);
+
+      setData({
+        inventory,
+        kpis: {
+          total_materials: gs.total_materials || materials.length,
+          low_stock: gs.low_stock || 0,
+          out_of_stock: gs.out_of_stock || 0,
+          total_valuation: gs.total_valuation || 0,
+          total_usage_records: gs.total_usages || 0,
+          distinct_materials_used: Object.keys(matMap).length,
+          estimated_cost: 0,
+          total_shipments: 0,
+          total_mixture_quantity: 0
+        },
+        consumption: gastos.slice(0, 50).map((tx, i) => ({
+          id: i, quantity: tx.quantity, usage_date: tx.date,
+          responsible: tx.details, material_name: tx.material_name,
+          unit: tx.unit, unit_price: 0, line_cost: 0,
+          project_name: tx.project_name, user_name: tx.user_name
+        })),
+        top_materials: topMats,
+        shipments: [],
+        project: null,
+        filters: { project_id: null, start_date: dateFrom || null, end_date: dateTo || null }
+      });
+    }
+  };
+
 
   // ─── Preset handler ───────────────────────────────────────
   const applyPreset = (preset) => {
