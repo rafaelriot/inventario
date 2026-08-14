@@ -270,3 +270,205 @@ exports.getProjectDashboardSummary = async (req, res) => {
     res.status(500).json({ message: 'Error al obtener el resumen del proyecto.' });
   }
 };
+
+// Advanced Dashboard — consolidated data endpoint
+exports.getAdvancedDashboard = async (req, res) => {
+  const { project_id, start_date, end_date } = req.query;
+
+  try {
+    // ─── 1. Inventory: all materials with semaphore status ───────
+    const [materials] = await pool.query(
+      'SELECT id, name, unit, current_stock, min_stock, unit_price, category FROM materials ORDER BY name ASC'
+    );
+
+    const inventory = materials.map(m => {
+      const stock = parseFloat(m.current_stock);
+      const min = parseFloat(m.min_stock);
+      let status = 'normal';
+      if (stock === 0) status = 'out';
+      else if (stock <= min) status = 'low';
+      return {
+        id: m.id,
+        name: m.name,
+        unit: m.unit,
+        current_stock: stock,
+        min_stock: min,
+        unit_price: parseFloat(m.unit_price),
+        category: m.category || 'Otros',
+        value: stock * parseFloat(m.unit_price),
+        status
+      };
+    });
+
+    // ─── 2. Build WHERE clauses for date/project filtering ──────
+    const usageWhere = [];
+    const usageParams = [];
+    const mixtureWhere = [];
+    const mixtureParams = [];
+
+    if (project_id) {
+      usageWhere.push('u.project_id = ?');
+      usageParams.push(project_id);
+      mixtureWhere.push('mu.project_id = ?');
+      mixtureParams.push(project_id);
+    }
+    if (start_date) {
+      usageWhere.push('u.usage_date >= ?');
+      usageParams.push(start_date);
+      mixtureWhere.push('mu.usage_date >= ?');
+      mixtureParams.push(start_date);
+    }
+    if (end_date) {
+      usageWhere.push('u.usage_date <= ?');
+      usageParams.push(end_date);
+      mixtureWhere.push('mu.usage_date <= ?');
+      mixtureParams.push(end_date);
+    }
+
+    const usageWhereSQL = usageWhere.length > 0 ? 'WHERE ' + usageWhere.join(' AND ') : '';
+    const mixtureWhereSQL = mixtureWhere.length > 0 ? 'WHERE ' + mixtureWhere.join(' AND ') : '';
+
+    // ─── 3. KPIs ────────────────────────────────────────────────
+    // Usage KPIs
+    const [[usageKpis]] = await pool.query(`
+      SELECT 
+        COUNT(*) AS total_usage_records,
+        COUNT(DISTINCT u.material_id) AS distinct_materials_used,
+        COALESCE(SUM(u.quantity * m.unit_price), 0) AS estimated_cost
+      FROM usages u
+      JOIN materials m ON u.material_id = m.id
+      ${usageWhereSQL}
+    `, usageParams);
+
+    // Mixture/Shipment KPIs
+    const [[mixtureKpis]] = await pool.query(`
+      SELECT 
+        COUNT(*) AS total_shipments,
+        COALESCE(SUM(mu.total_quantity), 0) AS total_mixture_quantity
+      FROM mixture_usages mu
+      ${mixtureWhereSQL}
+    `, mixtureParams);
+
+    // Inventory-level KPIs (always global, not filtered by date/project)
+    const totalMaterials = inventory.length;
+    const lowStockCount = inventory.filter(m => m.status === 'low').length;
+    const outOfStockCount = inventory.filter(m => m.status === 'out').length;
+    const totalValuation = inventory.reduce((sum, m) => sum + m.value, 0);
+
+    const kpis = {
+      total_materials: totalMaterials,
+      low_stock: lowStockCount,
+      out_of_stock: outOfStockCount,
+      total_valuation: totalValuation,
+      total_usage_records: usageKpis.total_usage_records,
+      distinct_materials_used: usageKpis.distinct_materials_used,
+      estimated_cost: parseFloat(usageKpis.estimated_cost),
+      total_shipments: mixtureKpis.total_shipments,
+      total_mixture_quantity: parseFloat(mixtureKpis.total_mixture_quantity)
+    };
+
+    // ─── 4. Consumption detail ──────────────────────────────────
+    const [consumption] = await pool.query(`
+      SELECT 
+        u.id,
+        u.quantity,
+        u.usage_date,
+        u.responsible,
+        m.name AS material_name,
+        m.unit,
+        m.unit_price,
+        (u.quantity * m.unit_price) AS line_cost,
+        p.name AS project_name,
+        usr.name AS user_name
+      FROM usages u
+      JOIN materials m ON u.material_id = m.id
+      LEFT JOIN projects p ON u.project_id = p.id
+      LEFT JOIN users usr ON u.user_id = usr.id
+      ${usageWhereSQL}
+      ORDER BY u.usage_date DESC, u.created_at DESC
+      LIMIT 200
+    `, usageParams);
+
+    // ─── 5. Top materials consumed (aggregated) ─────────────────
+    const [topMaterials] = await pool.query(`
+      SELECT 
+        m.id AS material_id,
+        m.name,
+        m.unit,
+        m.unit_price,
+        SUM(u.quantity) AS total_qty,
+        SUM(u.quantity * m.unit_price) AS total_cost,
+        COUNT(*) AS record_count
+      FROM usages u
+      JOIN materials m ON u.material_id = m.id
+      ${usageWhereSQL}
+      GROUP BY m.id, m.name, m.unit, m.unit_price
+      ORDER BY total_qty DESC
+      LIMIT 15
+    `, usageParams);
+
+    // ─── 6. Shipments (mixture_usages) ──────────────────────────
+    const [shipments] = await pool.query(`
+      SELECT 
+        mu.id,
+        mu.total_quantity,
+        mu.usage_date,
+        mu.responsible,
+        mu.notes,
+        mx.name AS mixture_name,
+        mx.unit AS mixture_unit,
+        p.name AS project_name,
+        usr.name AS user_name
+      FROM mixture_usages mu
+      JOIN mixtures mx ON mu.mixture_id = mx.id
+      LEFT JOIN projects p ON mu.project_id = p.id
+      LEFT JOIN users usr ON mu.user_id = usr.id
+      ${mixtureWhereSQL}
+      ORDER BY mu.usage_date DESC, mu.created_at DESC
+      LIMIT 200
+    `, mixtureParams);
+
+    // ─── 7. Project info (if filtered) ──────────────────────────
+    let projectInfo = null;
+    if (project_id) {
+      const [projRows] = await pool.query('SELECT id, name, status, location FROM projects WHERE id = ?', [project_id]);
+      if (projRows.length > 0) {
+        projectInfo = projRows[0];
+      }
+    }
+
+    res.json({
+      inventory,
+      kpis,
+      consumption,
+      top_materials: topMaterials.map(m => ({
+        material_id: m.material_id,
+        name: m.name,
+        unit: m.unit,
+        total_qty: parseFloat(m.total_qty),
+        total_cost: parseFloat(m.total_cost),
+        record_count: m.record_count
+      })),
+      shipments: shipments.map(s => ({
+        id: s.id,
+        quantity: parseFloat(s.total_quantity),
+        date: s.usage_date,
+        responsible: s.responsible,
+        notes: s.notes,
+        mixture_name: s.mixture_name,
+        mixture_unit: s.mixture_unit,
+        project_name: s.project_name,
+        user_name: s.user_name
+      })),
+      project: projectInfo,
+      filters: {
+        project_id: project_id || null,
+        start_date: start_date || null,
+        end_date: end_date || null
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error al obtener datos del dashboard avanzado.' });
+  }
+};
