@@ -104,6 +104,7 @@ export default function Dashboard() {
 
   // ─── UI state ─────────────────────────────────────────────
   const [inventorySearch, setInventorySearch] = useState('');
+  const [consumptionSearch, setConsumptionSearch] = useState('');
   const [showAllInventory, setShowAllInventory] = useState(false);
   const [shipmentsExpanded, setShipmentsExpanded] = useState(true);
   const [consumptionExpanded, setConsumptionExpanded] = useState(true);
@@ -297,6 +298,16 @@ export default function Dashboard() {
   }, [data?.inventory, inventorySearch]);
 
   const inventoryToShow = showAllInventory ? filteredInventory : filteredInventory.slice(0, 10);
+
+  // ─── Filtered consumption for search ──────────────────────
+  const filteredConsumption = useMemo(() => {
+    if (!data?.top_materials) return [];
+    const q = consumptionSearch.toLowerCase().trim();
+    if (!q) return data.top_materials;
+    return data.top_materials.filter(m =>
+      m.name.toLowerCase().includes(q)
+    );
+  }, [data?.top_materials, consumptionSearch]);
 
   // ─── Loading skeleton ─────────────────────────────────────
   if (loading) {
@@ -650,7 +661,7 @@ export default function Dashboard() {
         {/* ─── Panel: Consumo por Obra / Top Materials ─────── */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col">
           <div className="p-5 border-b border-slate-100">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <BarChart3 className="h-5 w-5 text-indigo-600" />
                 <h2 className="text-base font-bold text-slate-900">
@@ -664,25 +675,35 @@ export default function Dashboard() {
                 {consumptionExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </button>
             </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar material consumido..."
+                value={consumptionSearch}
+                onChange={(e) => setConsumptionSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/10 transition-all"
+              />
+            </div>
           </div>
 
           {consumptionExpanded && (
             <div className="flex-1 overflow-auto max-h-[420px]">
-              {(data?.top_materials?.length || 0) === 0 ? (
+              {filteredConsumption.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <Package className="h-10 w-10 text-slate-200 mb-3" />
                   <p className="text-sm font-medium text-slate-500">Sin consumo registrado</p>
                   <p className="text-xs text-slate-400 mt-1">
-                    {hasFilters ? 'Intenta ajustar los filtros' : 'Registra salidas de material para ver el resumen'}
+                    {hasFilters ? 'Intenta ajustar los filtros o el término de búsqueda' : 'Registra salidas de material para ver el resumen'}
                   </p>
                 </div>
               ) : (
                 <div className="p-4 space-y-2">
-                  {data.top_materials.map((m, i) => {
+                  {filteredConsumption.map((m, i) => {
                     const maxQty = data.top_materials[0]?.total_qty || 1;
                     const widthPct = Math.max(8, (m.total_qty / maxQty) * 100);
                     return (
-                      <div key={m.material_id} className="group">
+                      <div key={m.material_id || i} className="group">
                         <div className="flex items-center justify-between mb-1">
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="text-[11px] font-bold text-slate-300 w-5 shrink-0 text-right">
